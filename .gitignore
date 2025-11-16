@@ -1,0 +1,25 @@
+# 忽略 Python 虚拟环境
+venv/
+env/
+*.env
+
+# 忽略 Python 编译文件
+*.pyc
+__pycache__/
+
+# 忽略 IDE 配置文件
+.idea/
+.vscode/
+
+# 忽略 macOS 系统文件
+.DS_Store
+
+# 忽略大型模型和数据文件
+*.joblib
+*.pth
+*.mat
+
+# 忽略数据集文件夹 (如果它们很大)
+jpg/
+jpg_augmented/
+

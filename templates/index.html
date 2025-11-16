@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>花卉识别模型对比</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --rf-color: #17a2b8;
+            --cnn-color: #fd7e14;
+            --light-gray: #f8f9fa;
+            --white: #ffffff;
+            --border-color: #dee2e6;
+            --shadow: 0 8px 40px rgba(0, 0, 0, 0.08);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--light-gray);
+            margin: 0;
+            padding: 40px 20px;
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .upload-section {
+            background-color: var(--white);
+            padding: 30px 40px;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            max-width: 650px;
+            margin: 0 auto 40px auto;
+        }
+        h1, h2 { text-align: center; }
+        h1 { color: #2c3e50; }
+        .subtitle { text-align: center; color: var(--secondary-color); margin-bottom: 30px; }
+        #imageUpload { display: none; }
+        .upload-area {
+            border: 2px dashed var(--primary-color);
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover, .upload-area.drag-over {
+            background-color: #f0f7ff;
+            border-color: #0056b3;
+        }
+        .button {
+            background-color: var(--success-color);
+            color: var(--white);
+            padding: 14px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            margin-top: 25px;
+            display: block;
+            width: 100%;
+            transition: all 0.3s;
+        }
+        .button:hover:not(:disabled) { background-color: #218838; transform: translateY(-2px); }
+        .button:disabled { background-color: #90a4ae; cursor: not-allowed; }
+        .options-container {
+            margin-top: 25px;
+            padding: 20px;
+            background-color: #fdfdfd;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+        }
+        .options-container h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 16px;
+            color: #333;
+            text-align: left;
+        }
+        .model-selection, .tta-option {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .model-selection label, .tta-option label {
+            font-size: 15px;
+            color: var(--secondary-color);
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .model-selection input, .tta-option input {
+            margin-right: 8px;
+            width: 18px;
+            height: 18px;
+        }
+        .tta-option {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+            display: none; /* Initially hidden */
+        }
+        .tta-option label {
+            font-size: 14px;
+        }
+        #preview {
+            width: 100%;
+            max-height: 350px;
+            object-fit: contain;
+            border-radius: 12px;
+            margin-top: 25px;
+            display: none;
+            border: 1px solid var(--border-color);
+        }
+        .results-container {
+            display: none;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 40px;
+        }
+        .model-result-box {
+            background-color: var(--white);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .model-result-box.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .model-result-box h2 {
+            margin-top: 0;
+            padding-bottom: 15px;
+            border-bottom: 2px solid;
+        }
+        #rf-results h2 { border-color: var(--rf-color); color: var(--rf-color); }
+        #cnn-results h2 { border-color: var(--cnn-color); color: var(--cnn-color); }
+        ol { list-style: none; padding: 0; }
+        .result-item { margin-bottom: 18px; }
+        .result-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .progress-bar { width: 100%; background-color: #e9ecef; border-radius: 20px; height: 12px; overflow: hidden; }
+        .progress { height: 100%; border-radius: 20px; transition: width 0.8s ease-out; width: 0%; }
+        #rf-results .progress { background-color: var(--rf-color); }
+        #cnn-results .progress { background-color: var(--cnn-color); }
+        .loading { text-align: center; margin-top: 25px; color: var(--primary-color); display: none; font-size: 1.1em; }
+        .error-message { color: #d9534f; background-color: #f2dede; padding: 15px; border-radius: 8px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="upload-section">
+            <h1>🌺 花卉识别模型对比</h1>
+            <p class="subtitle">上传一张图片，查看传统方法与深度学习的识别效果差异</p>
+            <div class="upload-area" id="dropArea">
+                <p><strong>点击或拖拽图片至此</strong></p>
+                <input type="file" id="imageUpload" accept="image/png, image/jpeg, image/jpg">
+            </div>
+            <img id="preview" alt="图片预览">
+
+            <div class="options-container">
+                <h3>1. 选择要使用的模型</h3>
+                <div class="model-selection">
+                    <label>
+                        <input type="checkbox" name="model" value="rf" id="rf-checkbox" checked>
+                        传统模型 (Random Forest)
+                    </label>
+                    <label>
+                        <input type="checkbox" name="model" value="cnn" id="cnn-checkbox" checked>
+                        深度学习 (MobileNetV2)
+                    </label>
+                </div>
+                <div class="tta-option" id="tta-option-rf">
+                    <label for="tta-checkbox-rf">
+                        <input type="checkbox" id="tta-checkbox-rf">
+                        TTA 增强 (传统模型)
+                    </label>
+                </div>
+                <div class="tta-option" id="tta-option-cnn">
+                    <label for="tta-checkbox-cnn">
+                        <input type="checkbox" id="tta-checkbox-cnn">
+                        TTA 增强 (CNN 模型)
+                    </label>
+                </div>
+            </div>
+
+            <button class="button" id="predictBtn" disabled>开始预测</button>
+            <div class="loading" id="loading"><p>✨ 正在调用所选模型进行分析...</p></div>
+        </div>
+
+        <div class="results-container" id="resultsContainer">
+            <!-- 随机森林结果 -->
+            <div class="model-result-box" id="rf-results">
+                <h2>传统模型 (Random Forest)</h2>
+                <ol id="resultList-rf"></ol>
+            </div>
+            <!-- CNN结果 -->
+            <div class="model-result-box" id="cnn-results">
+                <h2>深度学习 (MobileNetV2)</h2>
+                <ol id="resultList-cnn"></ol>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Element References ---
+        const imageUpload = document.getElementById('imageUpload');
+        const preview = document.getElementById('preview');
+        const predictBtn = document.getElementById('predictBtn');
+        const loading = document.getElementById('loading');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const rfResultBox = document.getElementById('rf-results');
+        const cnnResultBox = document.getElementById('cnn-results');
+        const rfResultList = document.getElementById('resultList-rf');
+        const cnnResultList = document.getElementById('resultList-cnn');
+        const dropArea = document.getElementById('dropArea');
+        const modelCheckboxes = document.querySelectorAll('input[name="model"]');
+        const rfCheckbox = document.getElementById('rf-checkbox');
+        const cnnCheckbox = document.getElementById('cnn-checkbox');
+        const ttaOptionRf = document.getElementById('tta-option-rf');
+        const ttaCheckboxRf = document.getElementById('tta-checkbox-rf');
+        const ttaOptionCnn = document.getElementById('tta-option-cnn');
+        const ttaCheckboxCnn = document.getElementById('tta-checkbox-cnn');
+
+        let uploadedFile = null;
+
+        // --- Functions ---
+        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+
+        function handleDrop(e) {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFile(files[0]);
+        }
+
+        function handleFile(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                alert('请上传有效的图片文件 (JPG, PNG)。');
+                return;
+            }
+            uploadedFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+                predictBtn.disabled = false;
+                resultsContainer.style.display = 'none';
+                rfResultBox.classList.remove('visible');
+                cnnResultBox.classList.remove('visible');
+            };
+            reader.readAsDataURL(uploadedFile);
+        }
+
+        function toggleTtaOptions() {
+            ttaOptionRf.style.display = rfCheckbox.checked ? 'flex' : 'none';
+            if (!rfCheckbox.checked) {
+                ttaCheckboxRf.checked = false;
+            }
+            ttaOptionCnn.style.display = cnnCheckbox.checked ? 'flex' : 'none';
+            if (!cnnCheckbox.checked) {
+                ttaCheckboxCnn.checked = false;
+            }
+        }
+
+        function displayResults(listElement, results, modelType) {
+            listElement.innerHTML = '';
+            if (results && results.length > 0) {
+                results.forEach((item, index) => {
+                    const rank = index + 1;
+                    const listItem = document.createElement('li');
+                    listItem.className = 'result-item';
+                    const confidenceValue = parseFloat(item.confidence);
+
+                    listItem.innerHTML = `
+                        <div class="result-info">
+                            <span>No.${rank}: <strong>${item.name}</strong></span>
+                            <span>${item.confidence}%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress" id="progress-${modelType}-${rank}" style="width: 0;"></div>
+                        </div>
+                    `;
+                    listElement.appendChild(listItem);
+
+                    setTimeout(() => {
+                        const progressBar = document.getElementById(`progress-${modelType}-${rank}`);
+                        if(progressBar) progressBar.style.width = `${confidenceValue}%`;
+                    }, 100 * (rank + 1));
+                });
+            } else {
+                listElement.innerHTML = `<li class="error-message">此模型无预测结果或未选择。</li>`;
+            }
+        }
+
+        function displayError(listElement, message) {
+            listElement.innerHTML = `<li class="error-message">${message}</li>`;
+        }
+
+        // --- Event Listeners ---
+        dropArea.addEventListener('click', () => imageUpload.click());
+        imageUpload.addEventListener('change', (event) => handleFile(event.target.files[0]));
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => dropArea.addEventListener(e, preventDefaults, false));
+        ['dragenter', 'dragover'].forEach(e => dropArea.addEventListener(e, () => dropArea.classList.add('drag-over'), false));
+        ['dragleave', 'drop'].forEach(e => dropArea.addEventListener(e, () => dropArea.classList.remove('drag-over'), false));
+        dropArea.addEventListener('drop', handleDrop, false);
+        modelCheckboxes.forEach(cb => cb.addEventListener('change', toggleTtaOptions));
+
+        predictBtn.addEventListener('click', async () => {
+            if (!uploadedFile) return;
+
+            const selectedModels = Array.from(modelCheckboxes)
+                                      .filter(cb => cb.checked)
+                                      .map(cb => cb.value);
+
+            if (selectedModels.length === 0) {
+                alert('请至少选择一个模型进行预测。');
+                return;
+            }
+
+            predictBtn.disabled = true;
+            loading.style.display = 'block';
+            resultsContainer.style.display = 'none';
+            rfResultBox.style.display = 'none';
+            cnnResultBox.style.display = 'none';
+            rfResultList.innerHTML = '';
+            cnnResultList.innerHTML = '';
+
+            const formData = new FormData();
+            formData.append('image', uploadedFile);
+            selectedModels.forEach(model => formData.append('models[]', model));
+
+            if (rfCheckbox.checked && ttaCheckboxRf.checked) {
+                formData.append('tta_rf', 'true');
+            }
+            if (cnnCheckbox.checked && ttaCheckboxCnn.checked) {
+                formData.append('tta_cnn', 'true');
+            }
+
+            try {
+                const response = await fetch('/predict', { method: 'POST', body: formData });
+                const result = await response.json();
+
+                resultsContainer.style.display = 'grid';
+                resultsContainer.style.gridTemplateColumns = (result.results_rf.length > 0 && result.results_cnn.length > 0) ? '1fr 1fr' : '1fr';
+
+                if (response.ok && result.success) {
+                    if (result.results_rf.length > 0) {
+                        rfResultBox.style.display = 'block';
+                        displayResults(rfResultList, result.results_rf, 'rf');
+                        setTimeout(() => rfResultBox.classList.add('visible'), 100);
+                    }
+                    if (result.results_cnn.length > 0) {
+                        cnnResultBox.style.display = 'block';
+                        displayResults(cnnResultList, result.results_cnn, 'cnn');
+                        setTimeout(() => cnnResultBox.classList.add('visible'), result.results_rf.length > 0 ? 200 : 100);
+                    }
+                } else {
+                    if (selectedModels.includes('rf')) rfResultBox.style.display = 'block';
+                    if (selectedModels.includes('cnn')) cnnResultBox.style.display = 'block';
+                    displayError(rfResultList, result.error || '未知错误');
+                    displayError(cnnResultList, result.error || '未知错误');
+                    rfResultBox.classList.add('visible');
+                    cnnResultBox.classList.add('visible');
+                }
+            } catch (error) {
+                const errorMsg = `网络或服务器连接错误: ${error.message}`;
+                if (selectedModels.includes('rf')) rfResultBox.style.display = 'block';
+                if (selectedModels.includes('cnn')) cnnResultBox.style.display = 'block';
+                displayError(rfResultList, errorMsg);
+                displayError(cnnResultList, errorMsg);
+                resultsContainer.style.display = 'grid';
+                rfResultBox.classList.add('visible');
+                cnnResultBox.classList.add('visible');
+            } finally {
+                predictBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+
+        // --- Initial State Setup ---
+        toggleTtaOptions();
+    </script>
+</body>
+</html>

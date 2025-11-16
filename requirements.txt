@@ -1,0 +1,9 @@
+numpy
+scipy
+torch
+torchvision
+Pillow
+scikit-image
+joblib
+scikit-learn
+flask

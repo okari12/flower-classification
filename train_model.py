@@ -143,7 +143,7 @@ param_grid = {
 # 模型和标准化器已保存到 best_flower_model_v2.joblib 和 scaler_v2.joblib
 #
 # --- 最终优化模型评估结果 ---
-# 测试集 Top-5 准确率 (Accuracy): 70.39%
+# 测试集 Top-5 准确率 (Accuracy): 70.37%
 
 rf = RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=N_JOBS)
 

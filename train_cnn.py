@@ -57,15 +57,18 @@ def get_dataloaders():
     # 获取训练、验证和测试集的文件索引 (1-based)
     train_indices = setid_mat['trnid'][0] - 1
     valid_indices = setid_mat['valid'][0] - 1
+    test_indices = setid_mat['tstid'][0] - 1 # 新增测试集索引
 
     # 生成完整的文件路径列表
     all_image_files = sorted([os.path.join(IMAGE_DIR, f) for f in os.listdir(IMAGE_DIR) if f.endswith('.jpg')])
 
     train_paths = [all_image_files[i] for i in train_indices]
     valid_paths = [all_image_files[i] for i in valid_indices]
+    test_paths = [all_image_files[i] for i in test_indices] # 新增测试集路径
 
     train_labels = labels[train_indices]
     valid_labels = labels[valid_indices]
+    test_labels = labels[test_indices] # 新增测试集标签
 
     # 定义数据增强和转换
     data_transforms = {
@@ -86,11 +89,14 @@ def get_dataloaders():
     # 创建数据集和数据加载器
     train_dataset = FlowerDataset(train_paths, train_labels, data_transforms['train'])
     valid_dataset = FlowerDataset(valid_paths, valid_labels, data_transforms['val'])
+    test_dataset = FlowerDataset(test_paths, test_labels, data_transforms['val']) # 使用验证集的转换
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
     valid_loader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4) # 新增
 
-    return train_loader, valid_loader
+    return train_loader, valid_loader, test_loader
+
 
 # --- 3. 模型定义 ---
 def get_model():
@@ -172,15 +178,47 @@ def train_model(model, train_loader, valid_loader, device):
 
     print(f'Best val Acc: {best_acc:4f}')
 
-# --- 5. 主函数 ---
+# --- 5. 最终模型评估 (Top-5 Accuracy) ---
+def evaluate_top5(model, test_loader, device):
+    """在测试集上评估模型的 Top-5 准确率。"""
+    print("\n--- 开始最终模型评估 (Top-5 Accuracy) ---")
+    model.eval()
+    correct_predictions_top5 = 0
+    total_samples = 0
+
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            outputs = model(inputs)
+
+            # 获取 Top-5 预测结果
+            _, top5_preds = torch.topk(outputs, 5, dim=1)
+
+            # 检查真实标签是否存在于 Top-5 预测中
+            labels_reshaped = labels.view(-1, 1)
+            correct_predictions_top5 += torch.sum(labels_reshaped == top5_preds).item()
+
+            total_samples += labels.size(0)
+
+    accuracy_top5 = correct_predictions_top5 / total_samples
+    print(f"测试集 Top-5 准确率 (Accuracy): {accuracy_top5 * 100:.2f}%")
+
+
+# --- 6. 主函数 ---
 if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    train_loader, valid_loader = get_dataloaders()
+    train_loader, valid_loader, test_loader = get_dataloaders()
     model = get_model().to(device)
 
     print("Starting training...")
     train_model(model, train_loader, valid_loader, device)
     print("Training complete.")
 
+    # 加载最佳模型并进行评估（测试集 Top-5 准确率 (Accuracy): 94.71%）
+    print("\nLoading best model for final evaluation...")
+    model.load_state_dict(torch.load(MODEL_SAVE_PATH))
+    evaluate_top5(model, test_loader, device)
